@@ -9,6 +9,7 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
+
 const app = express();
 app.use(express.json());
 app.use(passport.initialize());
@@ -68,5 +69,5 @@ app.post('/login', async (req, res) => {
 });
 
 app.listen(5000, () => {
-  console.log('Server running on port 5000');
+  console.log('Server running on port 3000');
 });
