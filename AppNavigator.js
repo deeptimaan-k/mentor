@@ -1,10 +1,10 @@
 // AppNavigator.js
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
-import SplashScreenComponent from '../screens/SplashScreen';
-import LoginScreen from '../screens/LoginScreen';
-import SignupScreen from '../screens/SignupScreen';
-import HomeScreen from '../screens/HomeScreen';
+import SplashScreen from './screens/SplashScreen';
+import LoginScreen from './screens/LoginScreen';
+import SignupScreen from './screens/SignupScreen';
+import HomeScreen from './screens/HomeScreen';
 
 const Stack = createStackNavigator();
 
@@ -13,7 +13,7 @@ const AppNavigator = () => {
     <Stack.Navigator initialRouteName="Splash">
       <Stack.Screen 
         name="Splash" 
-        component={SplashScreenComponent} 
+        component={SplashScreen} 
         options={{ headerShown: false }} 
       />
       <Stack.Screen 
