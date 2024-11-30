@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "tanza-mentor",
-    "slug": "snack-14dbfe08-d72e-45b3-b8f5-62fc4d25d9af",
+    "name": "tanza_mentor",
+    "slug": "tanza_mentor",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -19,7 +19,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.deeptimaan_k.tanza_mentor"
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
