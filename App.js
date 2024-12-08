@@ -1,13 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import AppNavigator from './AppNavigator'; // Adjust the path if needed
+import { ThemeProvider } from '@rneui/themed';
+import { theme as baseTheme } from './theme';
+import AppNavigator from './AppNavigator'; 
+import { SettingsContext } from './contexts/SettingsContext';
 
-const App = () => {
+export default function App() {
+  const [theme, setTheme] = useState(baseTheme);
+  const [language, setLanguage] = useState('en');
+
+  const settingsContext = {
+    theme,
+    setTheme,
+    language,
+    setLanguage,
+  };
+
   return (
-    <NavigationContainer>
-      <AppNavigator />
-    </NavigationContainer>
+    <SettingsContext.Provider value={settingsContext}>
+      <ThemeProvider theme={theme}>
+        <NavigationContainer>
+          <AppNavigator />
+        </NavigationContainer>
+      </ThemeProvider>
+    </SettingsContext.Provider>
   );
-};
-
-export default App;
+}

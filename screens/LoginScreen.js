@@ -1,27 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  Image, 
-  SafeAreaView, 
-  ScrollView, 
-  StatusBar, 
-  Alert, 
-  ActivityIndicator 
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  Alert,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
+import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
-import theme from '../theme';
+import * as Google from 'expo-auth-session/providers/google';
+import {theme} from '../theme';
 
 // Configure web browser for authentication
 WebBrowser.maybeCompleteAuthSession();
+
+const API_BASE_URL = 'http://192.168.183.88:5000/api/auth'; // Centralized API endpoint
+
+const logToken = async () => {
+  try {
+    const token = await AsyncStorage.getItem('token');
+    console.log('Token:', token);
+  } catch (error) {
+    console.error('Error retrieving token:', error);
+  }
+};
 
 const LoginScreen = () => {
   const [username, setUsername] = useState('');
@@ -31,17 +44,17 @@ const LoginScreen = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const navigation = useNavigation();
 
-  // Configure Google OAuth
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: '355138840950-9l1ld5nrm48560a1irijn3al9hufcp7d.apps.googleusercontent.com', // Your Android client ID
-      scopes: ['openid', 'profile', 'email'],
-      redirectUri: AuthSession.makeRedirectUri({ useProxy: true }),
-    },
-    { authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth' }
-  );
+  // Google OAuth Configuration
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: Platform.select({
+      ios: '355138840950-b5elm1o3craf3oqpuu1vpqk20smenhmv.apps.googleusercontent.com',
+      android: '355138840950-fpv4sia21alud0untklrnqjmgtl5rc7l.apps.googleusercontent.com',
+      default: '355138840950-9l1ld5nrm48560a1irijn3al9hufcp7d.apps.googleusercontent.com',
+    }),
+    scopes: ['openid', 'profile', 'email'],
+  });
 
-  // Manual Login Function
+  // Handle manual login
   const handleLogin = async () => {
     if (!username || !password) {
       Alert.alert('Error', 'Please enter both username and password');
@@ -50,165 +63,182 @@ const LoginScreen = () => {
 
     setLoading(true);
     try {
-      const response = await fetch('http://192.168.183.88:5000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
+      const response = await axios.post(`${API_BASE_URL}/login`, {
+        username,
+        password,
       });
 
-      const data = await response.json();
-      setLoading(false);
+      const { token, userId, email } = response.data;
 
-      if (response.ok) {
-        await AsyncStorage.setItem('token', data.token);
-        navigation.replace('Home');
-      } else {
-        Alert.alert('Error', data.message || 'Login failed');
-      }
+      // Save user credentials
+      await AsyncStorage.multiSet([
+        ['token', token],
+        ['userId', userId],
+        ['userEmail', email],
+      ]);
+
+      navigation.replace('Home');
     } catch (error) {
+      const errorMessage = error.response?.data?.message || 'Login failed. Please try again.';
+      Alert.alert('Error', errorMessage);
+    } finally {
       setLoading(false);
-      Alert.alert('Error', 'Something went wrong. Please try again later.');
     }
   };
 
-  // Google Login Handler
-  const handleGoogleLogin = async () => {
+  // Handle Google OAuth
+  useEffect(() => {
+    const handleGoogleAuth = async () => {
+      if (response?.type === 'success') {
+        const { authentication } = response;
+        
+        if (authentication) {
+          try {
+            const idToken = authentication.idToken;
+            console.log('Google ID Token:', idToken); // Debug log
+
+            const googleResponse = await axios.post(
+              `${API_BASE_URL}/google/callback`, 
+              { token: idToken }
+            );
+
+            const { token, userId, email } = googleResponse.data;
+
+            await AsyncStorage.multiSet([
+              ['token', token],
+              ['userId', userId],
+              ['userEmail', email],
+            ]);
+
+            navigation.replace('Home');
+          } catch (error) {
+            console.error('Google Auth Backend Error:', error.response?.data);
+            Alert.alert(
+              'Authentication Failed', 
+              error.response?.data?.message || 'Google authentication failed'
+            );
+          }
+        }
+      }
+    };
+
+    handleGoogleAuth();
+  }, [response]);
+
+
+  const handleGoogleAuthentication = async (accessToken) => {
     setGoogleLoading(true);
     try {
-      // Start Google OAuth flow
-      const result = await promptAsync();
-  
-      if (result.type === 'success') {
-        const { authentication } = result;
-  
-        if (!authentication || !authentication.accessToken) {
-          throw new Error('Authentication token not received');
-        }
-  
-        // Send Google token to the backend for verification and JWT generation
-        const backendResponse = await fetch('http://192.168.183.88:5000/api/auth/google/callback', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            token: authentication.accessToken, // Include accessToken for backend processing
-          }),
-        });
-  
-        const data = await backendResponse.json();
-  
-        if (backendResponse.ok && data.token) {
-          // Save the JWT token locally and navigate to Home
-          await AsyncStorage.setItem('token', data.token);
-          navigation.replace('Home');
-        } else {
-          throw new Error(data.message || 'Google authentication failed');
-        }
-      } else if (result.type === 'cancel') {
-        Alert.alert('Login Cancelled', 'Google sign-in was cancelled');
-      }
+      const response = await axios.post(`${API_BASE_URL}/google/callback`, { token: accessToken });
+      const { token, userId, email } = response.data;
+
+      await AsyncStorage.multiSet([
+        ['token', token],
+        ['userId', userId],
+        ['userEmail', email],
+      ]);
+
+      navigation.replace('Home');
     } catch (error) {
-      console.error('Google Login Error:', error);
-      Alert.alert('Error', error.message || 'Failed to authenticate with Google');
+      const errorMessage =
+        error.response?.data?.message || 'Google authentication failed. Please try again.';
+      Alert.alert('Error', errorMessage);
     } finally {
       setGoogleLoading(false);
     }
   };
-  
-  // Render the rest of the component (same as previous implementation)
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.contentContainer}>
-        <StatusBar barStyle="light-content" backgroundColor={theme.colors.background} />
+    <ScrollView contentContainerStyle={styles.contentContainer}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.colors.background} />
 
-        <View style={styles.profileContainer}>
-          <View style={styles.profileImageContainer}>
-            <Image source={require('../assets/images/mentor.png')} style={styles.profileImage} />
-          </View>
+      <View style={styles.profileContainer}>
+        <View style={styles.profileImageContainer}>
+          <Image source={require('../assets/images/mentor.png')} style={styles.profileImage} />
+        </View>
+      </View>
+
+      <Text style={styles.title}>Welcome Back!</Text>
+      <Text style={styles.subtitle}>Welcome back, we missed you.</Text>
+
+      <View style={styles.inputContainer}>
+        <View style={styles.inputWrapper}>
+          <Icon name="account-outline" size={20} color={theme.colors.textSecondary} style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Username"
+            placeholderTextColor={theme.colors.textSecondary}
+            value={username}
+            onChangeText={setUsername}
+          />
         </View>
 
-        <Text style={styles.title}>Welcome Back!</Text>
-        <Text style={styles.subtitle}>Welcome back, we missed you.</Text>
-
-        <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
-            <Icon name="account-outline" size={20} color={theme.colors.textSecondary} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Username"
-              placeholderTextColor={theme.colors.textSecondary}
-              value={username}
-              onChangeText={setUsername}
-            />
-          </View>
-
-          <View style={styles.inputWrapper}>
-            <Icon name="key-outline" size={20} color={theme.colors.textSecondary} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor={theme.colors.textSecondary}
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Icon name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color={theme.colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity style={styles.forgotContainer}>
-            <Text style={styles.forgotText}>Forgot Password?</Text>
+        <View style={styles.inputWrapper}>
+          <Icon name="key-outline" size={20} color={theme.colors.textSecondary} style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor={theme.colors.textSecondary}
+            secureTextEntry={!showPassword}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <Icon name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color={theme.colors.textSecondary} />
           </TouchableOpacity>
+        </View>
 
-          <LinearGradient
-            colors={[theme.colors.buttonGradientStart, theme.colors.buttonGradientEnd]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.signInButton}
-          >
-            <TouchableOpacity style={styles.signInTouchable} onPress={handleLogin}>
-              {loading ? (
-                <ActivityIndicator color={theme.colors.buttonText} />
-              ) : (
-                <Text style={styles.signInText}>Sign in</Text>
-              )}
-            </TouchableOpacity>
-          </LinearGradient>
+        <TouchableOpacity style={styles.forgotContainer}>
+          <Text style={styles.forgotText}>Forgot Password?</Text>
+        </TouchableOpacity>
 
-          <View style={styles.dividerContainer}>
-            <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
-          </View>
-
-          <TouchableOpacity 
-            style={styles.googleButton} 
-            onPress={handleGoogleLogin}
-            disabled={!request || googleLoading}
-          >
-            {googleLoading ? (
-              <ActivityIndicator color={theme.colors.googleButtonText} />
+        <LinearGradient
+          colors={[theme.colors.buttonGradientStart, theme.colors.buttonGradientEnd]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.signInButton}
+        >
+          <TouchableOpacity style={styles.signInTouchable} onPress={handleLogin}>
+            {loading ? (
+              <ActivityIndicator color={theme.colors.buttonText} />
             ) : (
-              <>
-                <Icon name="google" size={20} color={theme.colors.googleButtonText} />
-                <Text style={styles.googleText}>Google</Text>
-              </>
+              <Text style={styles.signInText}>Sign in</Text>
             )}
           </TouchableOpacity>
+        </LinearGradient>
 
-          <View style={styles.registerContainer}>
-            <Text style={styles.registerText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
-              <Text style={styles.registerLink}>Register</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.dividerContainer}>
+          <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
         </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
+
+        <TouchableOpacity
+          style={styles.googleButton}
+          onPress={() => promptAsync()}
+          disabled={!request || googleLoading}
+        >
+          {googleLoading ? (
+            <ActivityIndicator color={theme.colors.googleButtonText} />
+          ) : (
+            <>
+              <Icon name="google" size={20} color={theme.colors.googleButtonText} />
+              <Text style={styles.googleText}>Google</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.registerContainer}>
+          <Text style={styles.registerText}>Don't have an account? </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
+            <Text style={styles.registerLink}>Register</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </ScrollView>
+  </SafeAreaView>
+);
 };
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -257,77 +287,75 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: theme.colors.inputBackground,
     borderRadius: theme.borderRadius.small,
-    marginBottom: theme.spacing.elementSpacing,
-    paddingHorizontal: 15,
-    height: theme.spacing.inputHeight,
+    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   inputIcon: {
     marginRight: 10,
   },
   input: {
     flex: 1,
-    color: theme.colors.textPrimary,
+    height: 40,
     fontSize: theme.fontSizes.input,
+    color: theme.colors.textPrimary,
   },
   forgotContainer: {
     alignItems: 'flex-end',
-    marginBottom: theme.spacing.elementSpacing,
+    marginBottom: 20,
   },
   forgotText: {
-    color: theme.colors.textSecondary,
-    fontSize: theme.fontSizes.register,
+    color: theme.colors.primary,
+    fontSize: theme.fontSizes.forgot,
   },
   signInButton: {
-    borderRadius: theme.borderRadius.small,
-    marginBottom: theme.spacing.elementSpacing,
-    overflow: 'hidden',
+    borderRadius: theme.borderRadius.medium,
+    paddingVertical: 14,
+    marginBottom: 20,
   },
   signInTouchable: {
-    paddingVertical: theme.spacing.buttonPadding,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   signInText: {
     color: theme.colors.buttonText,
-    fontSize: theme.fontSizes.button,
-    fontWeight: '600',
+    fontSize: theme.fontSizes.buttonText,
+    fontWeight: 'bold',
   },
   dividerContainer: {
     alignItems: 'center',
-    marginBottom: theme.spacing.elementSpacing,
+    marginBottom: 20,
   },
   dividerText: {
     color: theme.colors.textSecondary,
-    fontSize: theme.fontSizes.divider,
-    letterSpacing: 1,
+    fontSize: theme.fontSizes.dividerText,
   },
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.googleButtonBackground,
-    borderRadius: theme.borderRadius.small,
-    paddingVertical: theme.spacing.buttonPadding,
-    gap: 10,
-    marginBottom: theme.spacing.elementSpacing,
+    backgroundColor: theme.colors.googleButton,
+    paddingVertical: 14,
+    borderRadius: theme.borderRadius.medium,
   },
   googleText: {
     color: theme.colors.googleButtonText,
-    fontSize: theme.fontSizes.button,
-    marginLeft: 8,
+    fontSize: theme.fontSizes.buttonText,
+    fontWeight: 'bold',
+    marginLeft: 10,
   },
   registerContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
+    marginTop: 20,
   },
   registerText: {
     color: theme.colors.textSecondary,
-    fontSize: theme.fontSizes.register,
+    fontSize: theme.fontSizes.registerText,
   },
   registerLink: {
-    color: theme.colors.registerLink,
-    fontSize: theme.fontSizes.register,
-    fontWeight: '600',
+    color: theme.colors.primary,
+    fontSize: theme.fontSizes.registerLink,
   },
 });
 

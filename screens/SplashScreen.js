@@ -9,7 +9,7 @@ const SplashScreenComponent = ({ navigation }) => {
     
     setTimeout(() => {
       SplashScreen.hideAsync(); 
-      navigation.replace('Login');  
+      navigation.replace('Main');  
     }, 2000);
   }, [navigation]);
 

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import theme from '../theme'; // Adjust the path as needed
+import {theme} from '../theme'; // Adjust the path as needed
 import { useNavigation } from '@react-navigation/native'; // Import hook
 
 const SignupScreen = () => {

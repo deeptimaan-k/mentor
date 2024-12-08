@@ -1,14 +1,13 @@
 {
   "expo": {
-    "name": "tanza_mentor",
-    "slug": "tanzamentor",
+    "name": "mentor",
+    "slug": "mentor",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -19,25 +18,25 @@
       }
     },
     "android": {
+      "package": "com.deeptimaan.tanza",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.deeptimaan_k.tanza_mentor",
       "runtimeVersion": "1.0.0"
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
     },
+    "scheme": "tanza",
     "extra": {
       "eas": {
-        "projectId": "8f810797-7610-4b70-9d87-ef3fe96425ef"
+        "projectId": "58d2f9a2-0659-4bc6-be62-1ed97c9c4af4"
       }
     },
     "owner": "deeptimaan_k",
-    "scheme": "tanzamentor",
     "updates": {
-      "url": "https://u.expo.dev/8f810797-7610-4b70-9d87-ef3fe96425ef"
+      "url": "https://u.expo.dev/58d2f9a2-0659-4bc6-be62-1ed97c9c4af4"
     }
   }
 }
